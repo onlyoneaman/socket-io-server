@@ -1,6 +1,12 @@
 const sqlite3 = require('sqlite3').verbose();
+const { Sequelize } = require('sequelize');
 
 let db;
+
+const sequelize = new Sequelize({
+  dialect: 'sqlite',
+  storage: ':memory:',
+});
 
 function setupDatabase() {
     db = new sqlite3.Database(':memory:');
@@ -41,4 +47,4 @@ function getDatabase() {
     return db;
 }
 
-module.exports = { setupDatabase, getDatabase };
+module.exports = { sequelize, setupDatabase, getDatabase };
