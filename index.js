@@ -1,82 +1,129 @@
+const http = require('http');
 const express = require('express');
 const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
 const cors = require('cors');
+const socketIo = require('socket.io');
+const sqlite3 = require('sqlite3').verbose();
 
 const app = express();
 app.use(bodyParser.json());
-app.use(cors())
+app.use(cors());
 
-// Mock database
-let files = [];
+const server = http.createServer(app);
+const io = socketIo(server);
 
-// Models
-class File {
-  constructor(name) {
-    this.id = uuidv4();
-    this.name = name || "Untitled File";
-    this.status = false;
-    this.fields = [];
-    this.created_at = new Date();
-    this.updated_at = new Date();
-    this.addTestFields();
-  }
+// Connect to SQLite database
+const db = new sqlite3.Database(':memory:');
 
-  addTestFields() {
-    this.addField("Step 1");
-    this.addField("step 2");
-    this.addField("step 3");
-    this.addField("step 4");
-    this.addField("step 5");
-    this.addField("step 6");
-  }
+db.serialize(() => {
+    // Create tables from schema
+    db.run(`
+        CREATE TABLE IF NOT EXISTS Files (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            status BOOLEAN NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    `);
 
-    addField(name) {
-        const field = new Field(name);
-        this.fields.push(field);
-        this.updated_at = new Date();
-        return field;
-    }
-}
+    db.run(`
+        CREATE TABLE IF NOT EXISTS Fields (
+            id TEXT PRIMARY KEY,
+            name TEXT NOT NULL,
+            status BOOLEAN NOT NULL,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            file_id TEXT NOT NULL,
+            FOREIGN KEY (file_id) REFERENCES Files(id)
+        )
+    `);
 
-class Field {
-  constructor(name) {
-    this.id = uuidv4();
-    this.name = name;
-    this.status = false;
-    this.created_at = new Date();
-  }
-}
+    // Insert initial data from seed file
+    const seedQuery = require('fs').readFileSync('./seed.sql', 'utf8');
+    db.exec(seedQuery);
+});
 
 // API endpoints
 // Get all files
 app.get('/api/v1/files', (req, res) => {
-  res.json(files);
+    db.all('SELECT * FROM Files', (err, rows) => {
+        if (err) {
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        res.json(rows);
+    });
 });
 
 // Add a file
 app.post('/api/v1/files', (req, res) => {
-  const { name } = req.body;
-  const file = new File(name);
-  files.push(file);
-  res.status(201).json(file);
+    const { name } = req.body;
+    const id = uuidv4();
+    const status = false;
+    const created_at = new Date();
+    const updated_at = new Date();
+
+    db.run('INSERT INTO Files (id, name, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', [id, name, status, created_at, updated_at], (err) => {
+        if (err) {
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        res.status(201).json({ id, name, status, created_at, updated_at });
+    });
 });
 
-// get a file
+// Get a file by ID with its associated fields
 app.get('/api/v1/files/:id', (req, res) => {
     const { id } = req.params;
-    const file = files.find(file => file.id === id);
-    if (!file) {
-        return res.status(404).json({ message: "File not found" });
-    }
-    res.json(file);
+
+    // Fetch file details
+    db.get('SELECT * FROM Files WHERE id = ?', [id], (err, file) => {
+        if (err) {
+            res.status(500).json({ error: err.message });
+            return;
+        }
+        if (!file) {
+            res.status(404).json({ message: 'File not found' });
+            return;
+        }
+
+        // Fetch associated fields
+        db.all('SELECT * FROM Fields WHERE file_id = ?', [id], (err, fields) => {
+            if (err) {
+                res.status(500).json({ error: err.message });
+                return;
+            }
+
+            // Add fields to the file object
+            file.fields = fields;
+
+            // Send the file with its associated fields
+            res.json(file);
+        });
+    });
 });
 
-app.get("/", (req, res) => {
-  res.send("Hello World");
+// Serve the homepage
+app.get('/', (req, res) => {
+    res.send('Hello World');
+});
+
+io.on('connection', (socket) => {
+    console.log('Client connected');
+  
+    // Simulate field processing
+    socket.on('startFieldProcessing', (fileId) => {
+        // Your field processing logic here
+        // Example: update field status in the database
+    });
+  
+    socket.on('disconnect', () => {
+        console.log('Client disconnected');
+    });
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
 });
