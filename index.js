@@ -19,7 +19,24 @@ class File {
     this.fields = [];
     this.created_at = new Date();
     this.updated_at = new Date();
+    this.addTestFields();
   }
+
+  addTestFields() {
+    this.addField("Step 1");
+    this.addField("step 2");
+    this.addField("step 3");
+    this.addField("step 4");
+    this.addField("step 5");
+    this.addField("step 6");
+  }
+
+    addField(name) {
+        const field = new Field(name);
+        this.fields.push(field);
+        this.updated_at = new Date();
+        return field;
+    }
 }
 
 class Field {
