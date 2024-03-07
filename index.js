@@ -45,6 +45,16 @@ app.post('/api/v1/files', (req, res) => {
   res.status(201).json(file);
 });
 
+// get a file
+app.get('/api/v1/files/:id', (req, res) => {
+    const { id } = req.params;
+    const file = files.find(file => file.id === id);
+    if (!file) {
+        return res.status(404).json({ message: "File not found" });
+    }
+    res.json(file);
+});
+
 app.get("/", (req, res) => {
   res.send("Hello World");
 });
