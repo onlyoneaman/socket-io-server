@@ -17,11 +17,17 @@ async function setupSocket(io) {
                     return;
                 }
 
+                if(file.status) {
+                    console.log('File already processed');
+                    return;
+                }
+
                 // Find all fields associated with the file
                 const fields = await Field.findAll({ where: { fileId } });
 
                 let index = 0;
                 const intervalId = setInterval(() => {
+                  console.log('Processing field:', fields[index].id);
                     fields[index].update({ status: true }); // Mark field as done
                     io.emit('fieldUpdated', { fileId, fieldId: fields[index].id }); // Broadcast updated field status to all clients
                     index++;
